@@ -6,8 +6,8 @@
   <title>Кавовий Кабінет</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #000); padding: 15px; text-align: center; margin: 0; padding-bottom: 30px;}
-    .card { background: var(--tg-theme-secondary-bg-color, #f0f0f0); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);}
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #000); padding: 15px; text-align: center; margin: 0; padding-bottom: 30px; }
+    .card { background: var(--tg-theme-secondary-bg-color, #f0f0f0); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .btn { width: 100%; padding: 14px; margin: 6px 0; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; transition: transform 0.1s, opacity 0.2s; }
     .btn:active { transform: scale(0.98); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -24,14 +24,55 @@
     .coffee-text { color: #d9534f; font-weight: bold; }
     .pay-text { color: #5cb85c; font-weight: bold; }
 
-    /* Toast */
-    #toast { visibility: hidden; min-width: 220px; background-color: #333; color: #fff; text-align: center; border-radius: 25px; padding: 12px 20px; position: fixed; z-index: 100; left: 50%; top: 20px; transform: translateX(-50%); font-size: 15px; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transition: opacity 0.3s, top 0.3s; }
-    #toast.show { visibility: visible; opacity: 1; top: 30px; }
+    /* Повноекранне модальне вікно по центру */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex; justify-content: center; align-items: center;
+      z-index: 1000;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .modal-overlay.active {
+      opacity: 1; pointer-events: auto;
+    }
+    .modal-box {
+      background: var(--tg-theme-bg-color, #fff);
+      color: var(--tg-theme-text-color, #000);
+      padding: 25px 20px;
+      border-radius: 16px;
+      width: 80%; max-width: 300px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      transform: scale(0.8); transition: transform 0.2s ease;
+    }
+    .modal-overlay.active .modal-box {
+      transform: scale(1);
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #007bff;
+      border-radius: 50%;
+      width: 32px; height: 32px;
+      animation: spin 1s linear infinite;
+      margin: 15px auto;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .modal-icon { font-size: 36px; margin-bottom: 10px; }
   </style>
 </head>
 <body>
 
-  <div id="toast">Повідомлення</div>
+  <!-- Модальне вікно прогресу по центру -->
+  <div class="modal-overlay" id="status-modal">
+    <div class="modal-box">
+      <div id="modal-icon-container">
+        <div class="spinner" id="modal-spinner"></div>
+      </div>
+      <h3 id="modal-title" style="margin: 5px 0;">Надсилаємо...</h3>
+      <p id="modal-desc" style="font-size: 14px; color: #666; margin: 10px 0 0 0;">Інформація передається в систему</p>
+    </div>
+  </div>
 
   <h2 id="user-greeting">👋 Завантаження...</h2>
   
@@ -55,9 +96,7 @@
   <!-- Блок історії -->
   <div class="card">
     <h3>📜 Історія операцій</h3>
-    <ul class="history-list" id="history-container">
-      <!-- Рядки історії додаються сюди -->
-    </ul>
+    <ul class="history-list" id="history-container"></ul>
     <button class="btn btn-load" id="btn-load-more" onclick="loadMoreHistory()">👇 Показати ще історію</button>
   </div>
 
@@ -72,16 +111,28 @@
     const user = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user : { id: "test_user", first_name: "Гість" };
     document.getElementById('user-greeting').innerText = '👋 ' + user.first_name;
 
-    // Глобальні змінні для пагінації
     let currentHistoryOffset = 0;
-    const historyLimit = 10; // Скільки підвантажувати за раз
+    const historyLimit = 10;
 
-    function showToast(text) {
-      const toast = document.getElementById("toast");
-      toast.innerText = text;
-      toast.className = "show";
+    // Управління центральним модальним вікном
+    function showProgressModal(title, desc) {
+      document.getElementById('modal-spinner').style.display = 'block';
+      document.getElementById('modal-icon-container').innerHTML = '<div class="spinner" id="modal-spinner"></div>';
+      document.getElementById('modal-title').innerText = title;
+      document.getElementById('modal-desc').innerText = desc;
+      document.getElementById('status-modal').classList.add('active');
+    }
+
+    function showSuccessModal(title, desc) {
       if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
-      setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 2500);
+      document.getElementById('modal-icon-container').innerHTML = '<div class="modal-icon">✅</div>';
+      document.getElementById('modal-title').innerText = title;
+      document.getElementById('modal-desc').innerText = desc;
+      
+      // Автоматичне закриття через 1.5 секунди
+      setTimeout(() => {
+        document.getElementById('status-modal').classList.remove('active');
+      }, 1500);
     }
 
     function updateDashboard(data) {
@@ -98,10 +149,8 @@
       }
     }
 
-    // Функція ДОДАВАННЯ нових рядків до історії (без очищення старих)
     function appendHistoryItems(historyChunk, prepend = false) {
       const container = document.getElementById('history-container');
-      
       if (!historyChunk || historyChunk.length === 0) {
         if (currentHistoryOffset === 0) {
           container.innerHTML = '<li style="text-align: center; color: #777; padding: 10px;">Історія порожня</li>';
@@ -109,7 +158,6 @@
         return;
       }
 
-      // Якщо це перше завантаження — прибираємо заглушку
       if (currentHistoryOffset === 0 && historyChunk.length > 0) {
         container.innerHTML = ''; 
       }
@@ -127,17 +175,19 @@
       `).join('');
 
       if (prepend) {
-        // Додаємо вгору (при новій покупці)
         container.innerHTML = html + container.innerHTML;
       } else {
-        // Додаємо вниз (при "Показати ще")
         container.innerHTML += html;
       }
     }
 
-    function sendData(action, amount, successMessage, isLoadMore = false) {
-      // Якщо це нова покупка, ми скидаємо offset історії на 0
+    function sendData(action, amount, progressInfo, isLoadMore = false) {
       const offset = isLoadMore ? currentHistoryOffset : 0;
+
+      // Якщо передано тексти для прогресу — показуємо центральне модальне вікно
+      if (progressInfo) {
+        showProgressModal(progressInfo.startTitle, progressInfo.startDesc);
+      }
       
       fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
@@ -157,42 +207,57 @@
           updateDashboard(data.balance);
           
           if (!isLoadMore) {
-            // Нова покупка/перший завантаження: очищаємо і ставимо перші 10
             document.getElementById('history-container').innerHTML = '';
             appendHistoryItems(data.historyChunk);
           } else {
-            // Підвантаження: додаємо до поточного списку
             appendHistoryItems(data.historyChunk);
           }
           
           currentHistoryOffset = data.currentOffset;
           const loadMoreBtn = document.getElementById('btn-load-more');
-          
-          // Ховаємо кнопку, якщо історії більше немає
           loadMoreBtn.style.display = data.hasMore ? 'block' : 'none';
 
-          if (successMessage) showToast(successMessage);
+          // Показуємо успішний статус
+          if (progressInfo) {
+            showSuccessModal(progressInfo.successTitle, progressInfo.successDesc);
+          }
+        }
+      })
+      .catch(err => {
+        if (progressInfo) {
+          document.getElementById('modal-icon-container').innerHTML = '<div class="modal-icon">❌</div>';
+          document.getElementById('modal-title').innerText = 'Помилка!';
+          document.getElementById('modal-desc').innerText = 'Перевірте інтернет-з’єднання';
+          setTimeout(() => { document.getElementById('status-modal').classList.remove('active'); }, 2000);
         }
       });
     }
 
-    // Перше завантаження: показує баланс і перші 10 записів
+    // Перший запуск
     sendData('get_balance', 0, null, false);
 
-    // Функція кнопки "Показати ще"
     function loadMoreHistory() {
-      // isLoadMore = true
       sendData('get_balance', 0, null, true);
     }
 
     function addCoffee(amount) { 
-      sendData('add_coffee', amount, `☕ Каву (${amount} грн) додано!`, false); 
+      sendData('add_coffee', amount, {
+        startTitle: "☕ Записуємо каву...",
+        startDesc: "Надсилаємо інформацію у Google Таблицю",
+        successTitle: "Інформацію прийнято!",
+        successDesc: `Каву (${amount} грн) успішно додано в історію`
+      }, false); 
     }
 
     function addPayment() {
       const val = document.getElementById('pay-amount').value;
       if (val && Number(val) > 0) {
-        sendData('add_payment', val, `💵 Оплату (${val} грн) збережено!`, false);
+        sendData('add_payment', val, {
+          startTitle: "💵 Обробка оплати...",
+          startDesc: "Зберігаємо суму у ваш баланс",
+          successTitle: "Оплату зараховано!",
+          successDesc: `Внесено ${val} грн`
+        }, false);
         document.getElementById('pay-amount').value = '';
       }
     }
