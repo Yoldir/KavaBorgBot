@@ -85,7 +85,8 @@
   </div>
 
   <div class="card">
-    <button class="btn btn-coffee" onclick="addCoffee(30)">☕ +30 грн (Швидка кава)</button>
+    <button class="btn btn-coffee" onclick="addCoffee(20)">☕ +20 грн (Кава без молока)</button>
+    <button class="btn btn-coffee" onclick="addCoffee(30)">☕ +30 грн (Кава з молоком)</button>
   </div>
   
   <div class="card">
@@ -102,7 +103,7 @@
 
   <script>
     // ВСТАВТЕ СЮДИ ВАШЕ ПОСИЛАННЯ З GOOGLE APPS SCRIPT
-    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx6CxAIFoevHk1j0N_j0DN8Xoy0X0Ujfr1gePP_yjHuOc-KNJEB0iylBusHAmnJ4zK8lQ/exec";
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzbaVmwwAv9I_chJuG1VTKKoWIEsQR5JRsX6gdrAp-Kn52G9UoY04UdEU5TyuQTlOoqDA/exec";
 
     const tg = window.Telegram.WebApp;
     tg.ready();
@@ -114,9 +115,17 @@
     let currentHistoryOffset = 0;
     const historyLimit = 10;
 
-    // Управління центральним модальним вікном
+    // Очищення формату часу (якщо прийшла дата ISO 1899-12-30T13:18:53.000Z)
+    function cleanTimeFormat(timeStr) {
+      if (!timeStr) return '';
+      if (typeof timeStr === 'string' && timeStr.includes('T')) {
+        const timePart = timeStr.split('T')[1];
+        if (timePart) return timePart.split('.')[0];
+      }
+      return timeStr;
+    }
+
     function showProgressModal(title, desc) {
-      document.getElementById('modal-spinner').style.display = 'block';
       document.getElementById('modal-icon-container').innerHTML = '<div class="spinner" id="modal-spinner"></div>';
       document.getElementById('modal-title').innerText = title;
       document.getElementById('modal-desc').innerText = desc;
@@ -129,7 +138,6 @@
       document.getElementById('modal-title').innerText = title;
       document.getElementById('modal-desc').innerText = desc;
       
-      // Автоматичне закриття через 1.5 секунди
       setTimeout(() => {
         document.getElementById('status-modal').classList.remove('active');
       }, 1500);
@@ -162,17 +170,20 @@
         container.innerHTML = ''; 
       }
 
-      const html = historyChunk.map(item => `
-        <li class="history-item">
-          <div>
-            <div>${item.type === 'Кава' ? '☕ Кава' : '💵 Оплата'}</div>
-            <div class="time-tag">${item.date} ${item.time ? 'о ' + item.time : ''}</div>
-          </div>
-          <div class="${item.type === 'Кава' ? 'coffee-text' : 'pay-text'}">
-            ${item.type === 'Кава' ? '-' : '+'}${item.amount} грн
-          </div>
-        </li>
-      `).join('');
+      const html = historyChunk.map(item => {
+        const formattedTime = cleanTimeFormat(item.time);
+        return `
+          <li class="history-item">
+            <div>
+              <div>${item.type === 'Кава' ? '☕ Кава' : '💵 Оплата'}</div>
+              <div class="time-tag">${item.date} ${formattedTime ? 'о ' + formattedTime : ''}</div>
+            </div>
+            <div class="${item.type === 'Кава' ? 'coffee-text' : 'pay-text'}">
+              ${item.type === 'Кава' ? '-' : '+'}${item.amount} грн
+            </div>
+          </li>
+        `;
+      }).join('');
 
       if (prepend) {
         container.innerHTML = html + container.innerHTML;
@@ -184,7 +195,6 @@
     function sendData(action, amount, progressInfo, isLoadMore = false) {
       const offset = isLoadMore ? currentHistoryOffset : 0;
 
-      // Якщо передано тексти для прогресу — показуємо центральне модальне вікно
       if (progressInfo) {
         showProgressModal(progressInfo.startTitle, progressInfo.startDesc);
       }
@@ -217,7 +227,6 @@
           const loadMoreBtn = document.getElementById('btn-load-more');
           loadMoreBtn.style.display = data.hasMore ? 'block' : 'none';
 
-          // Показуємо успішний статус
           if (progressInfo) {
             showSuccessModal(progressInfo.successTitle, progressInfo.successDesc);
           }
